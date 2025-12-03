@@ -24,7 +24,13 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "Music Trainer Neo",
+      "shortName": "Trainer",
+      "backgroundColor": "#ffffff",
+      "display": "standalone",
+      "themeColor": "#00F0FF",
+      "description": "Neo-Brutalism Music Ear Trainer"
     }
   }
 }
