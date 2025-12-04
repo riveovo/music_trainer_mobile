@@ -15,6 +15,43 @@ const SOUND_FILES: Record<string, any> = {
     'E4': require('../assets/sounds/E4.wav'),
     'G4': require('../assets/sounds/G4.wav'),
     'C5': require('../assets/sounds/C5.wav'),
+    'success': require('../assets/sounds/success.wav'),
+    'error': require('../assets/sounds/error.wav'),
+};
+
+export const useGuitarSynth = (enabled: boolean = true) => {
+    // ... (existing state)
+
+    // ... (existing loadSounds logic - it iterates SOUND_FILES so it will load success/error too)
+
+    // ... (existing playNote logic)
+
+    const playFeedback = useCallback(async (type: 'success' | 'error') => {
+        if (!isLoaded) return;
+
+        // Use the dedicated SFX
+        const soundKey = type;
+        const pool = sounds.current[soundKey];
+
+        if (pool && pool.length > 0) {
+            const currentIndex = voiceIndex.current[soundKey] || 0;
+            const sound = pool[currentIndex];
+            voiceIndex.current[soundKey] = (currentIndex + 1) % pool.length;
+
+            try {
+                const status = await sound.getStatusAsync();
+                if (!status.isLoaded) return;
+                if (status.isPlaying) await sound.stopAsync();
+
+                await sound.setRateAsync(1.0, false); // Normal speed
+                await sound.playFromPositionAsync(0);
+            } catch (e) {
+                console.warn("Error playing feedback", e);
+            }
+        }
+    }, [isLoaded]);
+
+    return { playInterval, playMelody, playFeedback, isLoaded };
 };
 
 export const useGuitarSynth = (enabled: boolean = true) => {
@@ -109,7 +146,7 @@ export const useGuitarSynth = (enabled: boolean = true) => {
                         if (status.isPlaying) {
                             await sound.stopAsync();
                         }
-                        
+
                         await sound.setRateAsync(rate, false);
                         await sound.playFromPositionAsync(0);
                     } catch (e) {
