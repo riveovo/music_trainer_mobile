@@ -19,21 +19,28 @@ const SOUND_FILES: Record<string, any> = {
 
 export const useGuitarSynth = (enabled: boolean = true) => {
     const [isLoaded, setIsLoaded] = useState(false);
-    const sounds = useRef<Record<string, Audio.Sound>>({});
+    // Store arrays of Sound objects for polyphony
+    const sounds = useRef<Record<string, Audio.Sound[]>>({});
+    const voiceIndex = useRef<Record<string, number>>({});
 
     useEffect(() => {
         if (!enabled) return;
 
         const loadSounds = async () => {
             try {
-                // Load all sounds
+                // Load all sounds - create 2 instances for each to allow overlap
                 const promises = Object.keys(SOUND_FILES).map(async (key) => {
-                    const { sound } = await Audio.Sound.createAsync(SOUND_FILES[key]);
-                    sounds.current[key] = sound;
+                    const pool: Audio.Sound[] = [];
+                    for (let i = 0; i < 2; i++) {
+                        const { sound } = await Audio.Sound.createAsync(SOUND_FILES[key]);
+                        pool.push(sound);
+                    }
+                    sounds.current[key] = pool;
+                    voiceIndex.current[key] = 0;
                 });
 
                 await Promise.all(promises);
-                console.log("Guitar Samples Loaded!");
+                console.log("Guitar Samples Loaded (Polyphonic)!");
                 setIsLoaded(true);
             } catch (error) {
                 console.error("Failed to load sounds", error);
@@ -44,8 +51,8 @@ export const useGuitarSynth = (enabled: boolean = true) => {
 
         return () => {
             // Unload sounds
-            Object.values(sounds.current).forEach(sound => {
-                sound.unloadAsync();
+            Object.values(sounds.current).forEach(pool => {
+                pool.forEach(sound => sound.unloadAsync());
             });
         };
     }, [enabled]);
@@ -83,33 +90,40 @@ export const useGuitarSynth = (enabled: boolean = true) => {
         // Calculate rate: 2^(semitones/12)
         const rate = Math.pow(2, semitones / 12);
 
-        const sound = sounds.current[closestNote];
-        if (sound) {
+        // Round-robin voice selection
+        const pool = sounds.current[closestNote];
+        if (pool && pool.length > 0) {
+            const currentIndex = voiceIndex.current[closestNote] || 0;
+            const sound = pool[currentIndex];
+            // Update index for next time
+            voiceIndex.current[closestNote] = (currentIndex + 1) % pool.length;
+
             try {
-                if (timeOffset > 0) {
-                    setTimeout(async () => {
-                        if (!isMounted.current) return;
-                        try {
-                            const status = await sound.getStatusAsync();
-                            if (!status.isLoaded) return;
+                const playSound = async () => {
+                    if (!isMounted.current) return;
+                    try {
+                        const status = await sound.getStatusAsync();
+                        if (!status.isLoaded) return;
 
+                        // Stop if currently playing (though round-robin minimizes this)
+                        if (status.isPlaying) {
                             await sound.stopAsync();
-                            await sound.setRateAsync(rate, false);
-                            await sound.playFromPositionAsync(0);
-                        } catch (e) {
-                            console.warn("Error playing sound in timeout", e);
                         }
-                    }, timeOffset * 1000);
-                } else {
-                    const status = await sound.getStatusAsync();
-                    if (!status.isLoaded) return;
+                        
+                        await sound.setRateAsync(rate, false);
+                        await sound.playFromPositionAsync(0);
+                    } catch (e) {
+                        console.warn("Error playing sound", e);
+                    }
+                };
 
-                    await sound.stopAsync();
-                    await sound.setRateAsync(rate, false);
-                    await sound.playFromPositionAsync(0);
+                if (timeOffset > 0) {
+                    setTimeout(playSound, timeOffset * 1000);
+                } else {
+                    playSound();
                 }
             } catch (e) {
-                console.warn("Error playing sound", e);
+                console.warn("Error scheduling sound", e);
             }
         }
     }, [isLoaded]);

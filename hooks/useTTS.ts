@@ -29,10 +29,12 @@ export const useTTS = (enabled: boolean) => {
         if (Platform.OS === 'ios') {
             const preferred = voices.find(v => v.name === 'Samantha') || voices.find(v => v.name === 'Daniel');
             if (preferred) voiceId = preferred.identifier;
-        } else {
+        } else if (Platform.OS === 'android') {
             const preferred = voices.find(v => v.language.includes('en-US'));
             if (preferred) voiceId = preferred.identifier;
         }
+        // On Web, we let the browser pick the default voice if we can't find a specific one, 
+        // or we can try to find a "Google US English" one if available, but default is safer.
 
         const options: Speech.SpeechOptions = {
             rate: 1.0,
