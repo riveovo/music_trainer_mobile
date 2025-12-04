@@ -20,41 +20,6 @@ const SOUND_FILES: Record<string, any> = {
 };
 
 export const useGuitarSynth = (enabled: boolean = true) => {
-    // ... (existing state)
-
-    // ... (existing loadSounds logic - it iterates SOUND_FILES so it will load success/error too)
-
-    // ... (existing playNote logic)
-
-    const playFeedback = useCallback(async (type: 'success' | 'error') => {
-        if (!isLoaded) return;
-
-        // Use the dedicated SFX
-        const soundKey = type;
-        const pool = sounds.current[soundKey];
-
-        if (pool && pool.length > 0) {
-            const currentIndex = voiceIndex.current[soundKey] || 0;
-            const sound = pool[currentIndex];
-            voiceIndex.current[soundKey] = (currentIndex + 1) % pool.length;
-
-            try {
-                const status = await sound.getStatusAsync();
-                if (!status.isLoaded) return;
-                if (status.isPlaying) await sound.stopAsync();
-
-                await sound.setRateAsync(1.0, false); // Normal speed
-                await sound.playFromPositionAsync(0);
-            } catch (e) {
-                console.warn("Error playing feedback", e);
-            }
-        }
-    }, [isLoaded]);
-
-    return { playInterval, playMelody, playFeedback, isLoaded };
-};
-
-export const useGuitarSynth = (enabled: boolean = true) => {
     const [isLoaded, setIsLoaded] = useState(false);
     // Store arrays of Sound objects for polyphony
     const sounds = useRef<Record<string, Audio.Sound[]>>({});
@@ -113,6 +78,9 @@ export const useGuitarSynth = (enabled: boolean = true) => {
         let minDiff = Infinity;
 
         availableNotes.forEach(baseNote => {
+            // Skip non-note keys like 'success' or 'error'
+            if (baseNote === 'success' || baseNote === 'error') return;
+
             const baseMidi = getMidiNote(baseNote);
             const diff = Math.abs(targetMidi - baseMidi);
             if (diff < minDiff) {
@@ -187,19 +155,29 @@ export const useGuitarSynth = (enabled: boolean = true) => {
     }, [isLoaded, playNote]);
 
     const playFeedback = useCallback(async (type: 'success' | 'error') => {
-        // For feedback we can just use simple beeps or reuse guitar notes
-        // Let's reuse guitar notes for now to save size
         if (!isLoaded) return;
 
-        if (type === 'success') {
-            playNote("C5", 0);
-            playNote("E5", 0); // Polyphonic
-            playNote("G5", 0.1);
-        } else {
-            playNote("C3", 0);
-            playNote("C#3", 0);
+        // Use the dedicated SFX
+        const soundKey = type;
+        const pool = sounds.current[soundKey];
+
+        if (pool && pool.length > 0) {
+            const currentIndex = voiceIndex.current[soundKey] || 0;
+            const sound = pool[currentIndex];
+            voiceIndex.current[soundKey] = (currentIndex + 1) % pool.length;
+
+            try {
+                const status = await sound.getStatusAsync();
+                if (!status.isLoaded) return;
+                if (status.isPlaying) await sound.stopAsync();
+
+                await sound.setRateAsync(1.0, false); // Normal speed
+                await sound.playFromPositionAsync(0);
+            } catch (e) {
+                console.warn("Error playing feedback", e);
+            }
         }
-    }, [isLoaded, playNote]);
+    }, [isLoaded]);
 
     return { playInterval, playMelody, playFeedback, isLoaded };
 };
